@@ -94,6 +94,19 @@ async def log_action(guild, action, target, moderator, reason, duration=None):
     
     await log_channel.send(embed=embed)
 
+# Helper function to create error embeds
+async def send_error(interaction, message):
+    embed = discord.Embed(
+        title="Error",
+        description=message,
+        color=discord.Color.red()
+    )
+    
+    if interaction.response.is_done():
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    else:
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
 # Setup command
 @bot.tree.command(name="setup", description="Set up the moderation bot for this server")
 @app_commands.default_permissions(administrator=True)
@@ -106,7 +119,7 @@ async def setup(interaction: discord.Interaction, log_channel: discord.TextChann
     embed = discord.Embed(
         title="Setup Complete",
         description=f"Moderation logs will be sent to {log_channel.mention}",
-        color=discord.Color.green()
+        color=discord.Color.red()
     )
     await interaction.response.send_message(embed=embed)
 
@@ -116,7 +129,7 @@ async def setup(interaction: discord.Interaction, log_channel: discord.TextChann
 async def ban(interaction: discord.Interaction, user: discord.Member, reason: str = None, delete_days: int = 0):
     """Ban a user from the server"""
     if user.top_role >= interaction.user.top_role and interaction.user.id != interaction.guild.owner_id:
-        await interaction.response.send_message("You cannot ban someone with a role higher than or equal to yours.", ephemeral=True)
+        await send_error(interaction, "You cannot ban someone with a role higher than or equal to yours.")
         return
     
     try:
@@ -133,9 +146,9 @@ async def ban(interaction: discord.Interaction, user: discord.Member, reason: st
         await log_action(interaction.guild, "Ban", user, interaction.user, reason)
         
     except discord.Forbidden:
-        await interaction.response.send_message("I don't have permission to ban that user.", ephemeral=True)
+        await send_error(interaction, "I don't have permission to ban that user.")
     except Exception as e:
-        await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
+        await send_error(interaction, f"An error occurred: {str(e)}")
 
 # Unban command
 @bot.tree.command(name="unban", description="Unban a user from the server")
@@ -148,7 +161,7 @@ async def unban(interaction: discord.Interaction, user_id: str, reason: str = No
         user = discord.utils.get(banned_users, user=discord.Object(id=user_id))
         
         if not user:
-            await interaction.response.send_message("This user is not banned.", ephemeral=True)
+            await send_error(interaction, "This user is not banned.")
             return
         
         await interaction.guild.unban(discord.Object(id=user_id), reason=reason)
@@ -156,7 +169,7 @@ async def unban(interaction: discord.Interaction, user_id: str, reason: str = No
         embed = discord.Embed(
             title="User Unbanned",
             description=f"User with ID {user_id} has been unbanned from the server.",
-            color=discord.Color.green()
+            color=discord.Color.red()
         )
         embed.add_field(name="Reason", value=reason or "No reason provided")
         
@@ -164,11 +177,11 @@ async def unban(interaction: discord.Interaction, user_id: str, reason: str = No
         await log_action(interaction.guild, "Unban", discord.Object(id=user_id), interaction.user, reason)
         
     except ValueError:
-        await interaction.response.send_message("Please provide a valid user ID.", ephemeral=True)
+        await send_error(interaction, "Please provide a valid user ID.")
     except discord.Forbidden:
-        await interaction.response.send_message("I don't have permission to unban users.", ephemeral=True)
+        await send_error(interaction, "I don't have permission to unban users.")
     except Exception as e:
-        await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
+        await send_error(interaction, f"An error occurred: {str(e)}")
 
 # Kick command
 @bot.tree.command(name="kick", description="Kick a user from the server")
@@ -176,7 +189,7 @@ async def unban(interaction: discord.Interaction, user_id: str, reason: str = No
 async def kick(interaction: discord.Interaction, user: discord.Member, reason: str = None):
     """Kick a user from the server"""
     if user.top_role >= interaction.user.top_role and interaction.user.id != interaction.guild.owner_id:
-        await interaction.response.send_message("You cannot kick someone with a role higher than or equal to yours.", ephemeral=True)
+        await send_error(interaction, "You cannot kick someone with a role higher than or equal to yours.")
         return
     
     try:
@@ -185,7 +198,7 @@ async def kick(interaction: discord.Interaction, user: discord.Member, reason: s
         embed = discord.Embed(
             title="User Kicked",
             description=f"{user.mention} has been kicked from the server.",
-            color=discord.Color.orange()
+            color=discord.Color.red()
         )
         embed.add_field(name="Reason", value=reason or "No reason provided")
         
@@ -193,9 +206,9 @@ async def kick(interaction: discord.Interaction, user: discord.Member, reason: s
         await log_action(interaction.guild, "Kick", user, interaction.user, reason)
         
     except discord.Forbidden:
-        await interaction.response.send_message("I don't have permission to kick that user.", ephemeral=True)
+        await send_error(interaction, "I don't have permission to kick that user.")
     except Exception as e:
-        await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
+        await send_error(interaction, f"An error occurred: {str(e)}")
 
 # Timeout command
 @bot.tree.command(name="timeout", description="Timeout a user for a specified duration")
@@ -203,7 +216,7 @@ async def kick(interaction: discord.Interaction, user: discord.Member, reason: s
 async def timeout(interaction: discord.Interaction, user: discord.Member, duration: str, reason: str = None):
     """Timeout a user for a specified duration (e.g., 1h, 1d, 7d)"""
     if user.top_role >= interaction.user.top_role and interaction.user.id != interaction.guild.owner_id:
-        await interaction.response.send_message("You cannot timeout someone with a role higher than or equal to yours.", ephemeral=True)
+        await send_error(interaction, "You cannot timeout someone with a role higher than or equal to yours.")
         return
     
     try:
@@ -218,7 +231,7 @@ async def timeout(interaction: discord.Interaction, user: discord.Member, durati
         elif duration.endswith("d"):
             duration_seconds = int(duration[:-1]) * 86400
         else:
-            await interaction.response.send_message("Invalid duration format. Use s, m, h, or d (e.g., 30m, 1h, 1d).", ephemeral=True)
+            await send_error(interaction, "Invalid duration format. Use s, m, h, or d (e.g., 30m, 1h, 1d).")
             return
         
         # Max timeout is 28 days
@@ -231,7 +244,7 @@ async def timeout(interaction: discord.Interaction, user: discord.Member, durati
         embed = discord.Embed(
             title="User Timed Out",
             description=f"{user.mention} has been timed out.",
-            color=discord.Color.yellow()
+            color=discord.Color.red()
         )
         embed.add_field(name="Duration", value=duration)
         embed.add_field(name="Reason", value=reason or "No reason provided")
@@ -240,9 +253,9 @@ async def timeout(interaction: discord.Interaction, user: discord.Member, durati
         await log_action(interaction.guild, "Timeout", user, interaction.user, reason, duration)
         
     except discord.Forbidden:
-        await interaction.response.send_message("I don't have permission to timeout that user.", ephemeral=True)
+        await send_error(interaction, "I don't have permission to timeout that user.")
     except Exception as e:
-        await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
+        await send_error(interaction, f"An error occurred: {str(e)}")
 
 # Clear command
 @bot.tree.command(name="clear", description="Clear a specified number of messages")
@@ -250,7 +263,7 @@ async def timeout(interaction: discord.Interaction, user: discord.Member, durati
 async def clear(interaction: discord.Interaction, amount: int, user: discord.Member = None):
     """Clear a specified number of messages, optionally from a specific user"""
     if amount <= 0 or amount > 100:
-        await interaction.response.send_message("Please provide a number between 1 and 100.", ephemeral=True)
+        await send_error(interaction, "Please provide a number between 1 and 100.")
         return
     
     await interaction.response.defer(ephemeral=True)
@@ -261,17 +274,29 @@ async def clear(interaction: discord.Interaction, amount: int, user: discord.Mem
                 return message.author.id == user.id
             
             deleted = await interaction.channel.purge(limit=amount, check=check)
-            await interaction.followup.send(f"Deleted {len(deleted)} messages from {user.mention}.", ephemeral=True)
+            
+            embed = discord.Embed(
+                title="Messages Cleared",
+                description=f"Deleted {len(deleted)} messages from {user.mention}.",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
             await log_action(interaction.guild, "Clear", user, interaction.user, f"Cleared {len(deleted)} messages from {user.name}")
         else:
             deleted = await interaction.channel.purge(limit=amount)
-            await interaction.followup.send(f"Deleted {len(deleted)} messages.", ephemeral=True)
+            
+            embed = discord.Embed(
+                title="Messages Cleared",
+                description=f"Deleted {len(deleted)} messages.",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
             await log_action(interaction.guild, "Clear", interaction.channel, interaction.user, f"Cleared {len(deleted)} messages from {interaction.channel.name}")
             
     except discord.Forbidden:
-        await interaction.followup.send("I don't have permission to delete messages.", ephemeral=True)
+        await send_error(interaction, "I don't have permission to delete messages.")
     except Exception as e:
-        await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+        await send_error(interaction, f"An error occurred: {str(e)}")
 
 # Warn command
 @bot.tree.command(name="warn", description="Warn a user")
@@ -279,7 +304,7 @@ async def clear(interaction: discord.Interaction, amount: int, user: discord.Mem
 async def warn(interaction: discord.Interaction, user: discord.Member, reason: str = None):
     """Warn a user and apply automatic actions based on warning count"""
     if user.top_role >= interaction.user.top_role and interaction.user.id != interaction.guild.owner_id:
-        await interaction.response.send_message("You cannot warn someone with a role higher than or equal to yours.", ephemeral=True)
+        await send_error(interaction, "You cannot warn someone with a role higher than or equal to yours.")
         return
     
     guild_id = str(interaction.guild.id)
@@ -308,7 +333,7 @@ async def warn(interaction: discord.Interaction, user: discord.Member, reason: s
     embed = discord.Embed(
         title="User Warned",
         description=f"{user.mention} has been warned.",
-        color=discord.Color.yellow()
+        color=discord.Color.red()
     )
     embed.add_field(name="Reason", value=reason or "No reason provided")
     embed.add_field(name="Warning Count", value=str(warning_count))
@@ -322,17 +347,35 @@ async def warn(interaction: discord.Interaction, user: discord.Member, reason: s
             if action == "timeout":
                 until = discord.utils.utcnow() + datetime.timedelta(hours=1)
                 await user.timeout(until, reason=f"Automatic timeout after {threshold} warnings")
-                await interaction.channel.send(f"{user.mention} has been automatically timed out for 1 hour after receiving {threshold} warnings.")
+                
+                auto_embed = discord.Embed(
+                    title="Automatic Action",
+                    description=f"{user.mention} has been automatically timed out for 1 hour after receiving {threshold} warnings.",
+                    color=discord.Color.red()
+                )
+                await interaction.channel.send(embed=auto_embed)
                 await log_action(interaction.guild, "Auto-Timeout", user, bot.user, f"Automatic timeout after {threshold} warnings", "1 hour")
             
             elif action == "kick":
                 await user.kick(reason=f"Automatic kick after {threshold} warnings")
-                await interaction.channel.send(f"{user.mention} has been automatically kicked after receiving {threshold} warnings.")
+                
+                auto_embed = discord.Embed(
+                    title="Automatic Action",
+                    description=f"{user.mention} has been automatically kicked after receiving {threshold} warnings.",
+                    color=discord.Color.red()
+                )
+                await interaction.channel.send(embed=auto_embed)
                 await log_action(interaction.guild, "Auto-Kick", user, bot.user, f"Automatic kick after {threshold} warnings")
             
             elif action == "ban":
                 await user.ban(reason=f"Automatic ban after {threshold} warnings")
-                await interaction.channel.send(f"{user.mention} has been automatically banned after receiving {threshold} warnings.")
+                
+                auto_embed = discord.Embed(
+                    title="Automatic Action",
+                    description=f"{user.mention} has been automatically banned after receiving {threshold} warnings.",
+                    color=discord.Color.red()
+                )
+                await interaction.channel.send(embed=auto_embed)
                 await log_action(interaction.guild, "Auto-Ban", user, bot.user, f"Automatic ban after {threshold} warnings")
 
 # Warnings command
@@ -346,7 +389,13 @@ async def warnings(interaction: discord.Interaction, user: discord.Member):
     if (guild_id not in bot.config["warnings"] or 
         user_id not in bot.config["warnings"][guild_id] or
         not bot.config["warnings"][guild_id][user_id]):
-        await interaction.response.send_message(f"{user.mention} has no warnings.", ephemeral=True)
+        
+        embed = discord.Embed(
+            title="No Warnings",
+            description=f"{user.mention} has no warnings.",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     
     warnings_list = bot.config["warnings"][guild_id][user_id]
@@ -354,7 +403,7 @@ async def warnings(interaction: discord.Interaction, user: discord.Member):
     embed = discord.Embed(
         title=f"Warnings for {user.name}",
         description=f"{user.mention} has {len(warnings_list)} warning(s).",
-        color=discord.Color.yellow()
+        color=discord.Color.red()
     )
     
     for i, warning in enumerate(warnings_list, 1):
@@ -383,7 +432,13 @@ async def clearwarnings(interaction: discord.Interaction, user: discord.Member):
     if (guild_id not in bot.config["warnings"] or 
         user_id not in bot.config["warnings"][guild_id] or
         not bot.config["warnings"][guild_id][user_id]):
-        await interaction.response.send_message(f"{user.mention} has no warnings to clear.", ephemeral=True)
+        
+        embed = discord.Embed(
+            title="No Warnings",
+            description=f"{user.mention} has no warnings to clear.",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     
     warning_count = len(bot.config["warnings"][guild_id][user_id])
@@ -393,7 +448,7 @@ async def clearwarnings(interaction: discord.Interaction, user: discord.Member):
     embed = discord.Embed(
         title="Warnings Cleared",
         description=f"Cleared {warning_count} warning(s) for {user.mention}.",
-        color=discord.Color.green()
+        color=discord.Color.red()
     )
     
     await interaction.response.send_message(embed=embed)
@@ -409,4 +464,4 @@ if __name__ == "__main__":
     
     bot.run(TOKEN)
 
-console.log("This is the complete Discord moderation bot in a single file.")
+console.log("bot is up.")
